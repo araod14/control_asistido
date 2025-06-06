@@ -369,7 +369,7 @@ class PIDControlApp:
 
         return sys_total, K, L, T
 
-    def modelo_nolineal_oe(self, t, u, y, nb=2, d=1):
+    def modelo_nolineal_oe(self, t, u, y, nb=2, d=100):
         """
         Modelo OE no lineal (cuadrático) con tiempo muerto de d pasos.
         :param t: Tiempo
@@ -426,7 +426,7 @@ class PIDControlApp:
 
         return sys, K, d * Ts, Ts * 2
     
-    def modelo_lineal(self, t, u, y, d=1):
+    def modelo_lineal(self, t, u, y, d=50):
         """
         Modelo ARX de segundo orden con tiempo muerto (d pasos).
         :param t: Vector de tiempo
