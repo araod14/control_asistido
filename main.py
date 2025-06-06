@@ -423,6 +423,7 @@ class PIDControlApp:
         num = [0]*d + [K]
         den = [1, 1]  # Aproximación básica
         sys = ct.TransferFunction(num, den, dt=Ts)
+        logging.info("\nFunción de transferencia estimada:\n%s", sys)
 
         return sys, K, d * Ts, Ts * 2
     
@@ -468,6 +469,7 @@ class PIDControlApp:
         den = [1, -theta[0], -theta[1]]
         Ts = t[1] - t[0]
         sys = ct.TransferFunction(num, den, dt=Ts)
+        logging.info("\nFunción de transferencia estimada:\n%s", sys)
 
         return sys, sum(num)/sum(den), Ts, d*Ts
     
@@ -518,6 +520,7 @@ class PIDControlApp:
         num = [K]
         den = [T_p, 1]
         sys = ct.TransferFunction(num, den)
+        logging.info("\nFunción de transferencia estimada:\n%s", sys)
         return sys, K, L, T_p
     
     def manual_pid_design(self):
@@ -595,11 +598,6 @@ class PIDControlApp:
                 self.simular_controlador_pid(Kp, Ki, Kd, "Respuesta en Frecuencia")
                 self.graficar_bode(self.sys, Kp, Ki, Kd)
             elif method == "PID con Scikit-Learn":
-                if self.t is None or self.y is None or self.u is None:
-                    logging.error("Datos insuficientes para entrenar PID con scikit-learn")
-                    return
-                dt = self.t[1] - self.t[0]
-                setpoint = np.ones_like(self.y) * self.y[-1]  # Asumimos setpoint constante
                 Kp, Ki, Kd = self.pid_via_sklearn(self.sys)
                 self.simular_controlador_pid(Kp, Ki, Kd, "PID con Scikit-Learn")
             elif method == "PID Manual":
