@@ -308,6 +308,7 @@ class PIDControlApp:
 
         self.plot_model_comparison(t, y, t_model, y_model, 'Modelo estimado (análisis respuesta escalón)')
         logging.info("\nFunción de transferencia estimada:\n%s", sys)
+        logging.info("\nValores de K, L y T estimados:\nK = %.6f\nL = %.6f\nT = %.6f", K, tau_28, tau_63 - tau_28)
 
         mse = self.calcular_mse(y, y_model)
         logging.info("Error cuadrático medio (2º orden): %.6f", mse)
@@ -363,6 +364,7 @@ class PIDControlApp:
 
         self.plot_model_comparison(t, y, t_model, y_model, 'Modelo 2º orden + tiempo muerto')
         logging.info("\nFunción de transferencia estimada (con retardo):\n%s", sys_total)
+        logging.info("\nValores de K, L y T estimados:\nK = %.6f\nL = %.6f\nT = %.6f", K, L, T)
 
         mse = self.calcular_mse(y, y_model)
         logging.info("Error cuadrático medio (2º orden + tiempo muerto): %.6f", mse)
@@ -424,7 +426,7 @@ class PIDControlApp:
         den = [1, 1]  # Aproximación básica
         sys = ct.TransferFunction(num, den, dt=Ts)
         logging.info("\nFunción de transferencia estimada:\n%s", sys)
-
+        logging.info("\nValores de K, L y T estimados:\nK = %.6f\nL = %.6f\nT = %.6f", K, d * Ts, Ts * 2)
         return sys, K, d * Ts, Ts * 2
     
     def modelo_lineal(self, t, u, y, d=50):
@@ -521,6 +523,7 @@ class PIDControlApp:
         den = [T_p, 1]
         sys = ct.TransferFunction(num, den)
         logging.info("\nFunción de transferencia estimada:\n%s", sys)
+        logging.info("\nValores de K, L y T estimados:\nK = %.6f\nL = %.6f\nT = %.6f", K, L, T_p)
         return sys, K, L, T_p
     
     def manual_pid_design(self):
