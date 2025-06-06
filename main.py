@@ -66,7 +66,7 @@ class PIDControlApp:
         ttk.Label(control_frame, text="Modelo a identificar:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.model_var = tk.StringVar()
         self.model_combobox = ttk.Combobox(control_frame, textvariable=self.model_var, 
-                                         values=["Análisis respuesta escalón", "Lineal ARX", "No Lineal ARMAX"])
+                                         values=["Análisis respuesta escalón", "Lineal ARX", "No Lineal ARMAX", "No Lineal OE"])
         self.model_combobox.grid(row=1, column=1, sticky=tk.W, padx=5)
         self.model_combobox.current(0)
         ttk.Button(control_frame, text="Identificar", command=self.identify_model).grid(row=1, column=2)
@@ -265,6 +265,8 @@ class PIDControlApp:
                 self.sys, self.K, self.L, self.T = self.modelo_lineal(self.t, self.u, self.y)
             elif model_type == "No Lineal ARMAX":
                 self.sys, self.K, self.L, self.T = self.modelo_nolineal(self.t, self.u, self.y)
+            elif model_type == "No Lineal OE":
+                self.sys, self.K, self.L, self.T = self.modelo_nolineal_oe(self.t, self.u, self.y)
             else:
                 logging.error("Tipo de modelo no reconocido")
                 return
@@ -307,6 +309,63 @@ class PIDControlApp:
         mse = self.calcular_mse(y, y_model)
         logging.info("Error cuadrático medio (2º orden): %.6f", mse)
         return sys, K, tau_28, tau_63 - tau_28
+    
+    def modelo_nolineal_oe(self, t, u, y, nb=2, d=1):
+        """
+        Modelo OE no lineal (cuadrático) con tiempo muerto de d pasos.
+        :param t: Tiempo
+        :param u: Entrada
+        :param y: Salida
+        :param nb: Orden del numerador (entrada)
+        :param d: Tiempo muerto (en pasos)
+        """
+        N = len(y)
+        inicio = nb + d
+        Phi = []
+
+        for i in range(inicio, N):
+            row = []
+            # Términos lineales en u con tiempo muerto
+            for j in range(1, nb + 1):
+                row.append(u[i - d - j + 1])
+            # Términos no lineales en u^2
+            for j in range(1, nb + 1):
+                row.append(u[i - d - j + 1] ** 2)
+            Phi.append(row)
+
+        Phi = np.array(Phi)
+        Y = y[inicio:]
+
+        # Estimación de parámetros
+        theta = np.linalg.lstsq(Phi, Y, rcond=None)[0]
+        logging.info("\nCoeficientes estimados OE no lineal:\n%s", theta)
+
+        # Simulación del modelo OE
+        y_sim = np.zeros(N)
+        y_sim[:inicio] = y[:inicio]
+        for i in range(inicio, N):
+            val = 0
+            idx = 0
+            for j in range(nb):
+                val += theta[idx] * u[i - d - j]
+                idx += 1
+            for j in range(nb):
+                val += theta[idx] * u[i - d - j] ** 2
+                idx += 1
+            y_sim[i] = val
+
+        self.plot_model_comparison(t, y, t, y_sim, f'Modelo OE no lineal (d = {d} pasos)')
+        mse = self.calcular_mse(y, y_sim, offset=inicio)
+        logging.info("Error cuadrático medio (OE no lineal): %.6f", mse)
+
+        # Aproximación para FT (sólo para representar ganancia y retardo)
+        Ts = t[1] - t[0]
+        K = y[-1] / u[-1] if u[-1] != 0 else 1
+        num = [0]*d + [K]
+        den = [1, 1]  # Aproximación básica
+        sys = ct.TransferFunction(num, den, dt=Ts)
+
+        return sys, K, d * Ts, Ts * 2
     
     def modelo_lineal(self, t, u, y, d=1):
         """
