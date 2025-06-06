@@ -278,11 +278,31 @@ class PIDControlApp:
             logging.error(f"Error al identificar el modelo: {str(e)}")
     
     def modelo_segundo_orden(self, t, u, y):
-        K = y[-1] / u[-1]
-        target_63 = 0.632 * K * u[-1]
-        target_28 = 0.283 * K * u[-1]
-        tau_63 = t[np.argmax(y >= target_63)]
-        tau_28 = t[np.argmax(y >= target_28)]
+        # Estimar K como ganancia estática
+        y0 = y[0]
+        y_ss = y[-1]  # Asumiendo que se alcanza el estado estacionario
+        u0 = u[0]
+        u_ss = u[-1]
+
+        delta_y = y_ss - y0
+        delta_u = u_ss - u0
+        if delta_u == 0:
+            logging.warning("Entrada no cambió, no se puede calcular la ganancia K.")
+            return None, 0, 0, 0
+
+        K = delta_y / delta_u
+
+        # Targets para tiempos característicos
+        target_28 = y0 + 0.283 * delta_y
+        target_63 = y0 + 0.632 * delta_y
+
+        # Buscar tiempos donde se alcanzan los valores umbral
+        try:
+            tau_28 = t[np.where(y >= target_28)[0][0]]
+            tau_63 = t[np.where(y >= target_63)[0][0]]
+        except IndexError:
+            logging.warning("No se alcanzaron los niveles del 28.3%% o 63.2%% en la respuesta.")
+            return None, K, 0, 0
 
         T = 1.5 * (tau_63 - tau_28)
         zeta = (1.733 * (tau_63 - tau_28)) / T if T != 0 else 1
@@ -303,8 +323,8 @@ class PIDControlApp:
 
         sys = ct.TransferFunction(num, den)
         t_model, y_model = ct.step_response(sys, T=t[-1], T_num=len(t))
-        y_model *= u[-1]
-        y_model += y[0]
+        y_model *= delta_u
+        y_model += y0
 
         self.plot_model_comparison(t, y, t_model, y_model, 'Modelo estimado (análisis respuesta escalón)')
         logging.info("\nFunción de transferencia estimada:\n%s", sys)
@@ -625,11 +645,20 @@ class PIDControlApp:
         return np.mean((y_real[offset:] - y_modelo[offset:])**2)
     
     def ziegler_nichols_pid(self, K, L, T):
-        Kp = 1.2 * T / (K * L)
-        Ti = 2 * L
+        if K == 0:
+            raise ValueError("La ganancia K no puede ser cero")
+        if L < 0:
+            raise ValueError("El tiempo muerto L no puede ser negativo")
+        if T <= 0:
+            raise ValueError("La constante de tiempo T debe ser positiva")
+        Kp = (1.2 * T) / (K * L)
+        Ti = 2.0 * L
         Td = 0.5 * L
+        
+        # Conversión a forma estándar
         Ki = Kp / Ti
         Kd = Kp * Td
+        
         return Kp, Ki, Kd
 
     def disenar_pid_lugar_raices(self, planta, factor_amortiguamiento=0.7, margen_fase=60):
