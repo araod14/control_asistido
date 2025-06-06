@@ -337,11 +337,25 @@ class PIDControlApp:
     def modelo_segundo_orden_con_retraso(self, t, u, y):
         K = y[-1] / u[-1] if u[-1] != 0 else 1
 
-        # Estimar tiempos característicos
+        # Estimar tiempos característicos - asegurar que haya diferencia
         target_63 = 0.632 * K * u[-1]
         target_28 = 0.283 * K * u[-1]
-        tau_63 = t[np.argmax(y >= target_63)]
-        tau_28 = t[np.argmax(y >= target_28)]
+
+        # Encontrar los primeros índices donde y supera los umbrales
+        idx_63 = np.argmax(y >= target_63)
+        idx_28 = np.argmax(y >= target_28)
+
+        # Asegurar que idx_63 > idx_28
+        if idx_63 <= idx_28:
+            idx_63 = idx_28 + 1  # o ajustar según sea necesario
+
+        tau_63 = t[idx_63]
+        tau_28 = t[idx_28]
+
+        # Verificar que hay diferencia suficiente
+        min_diff = t[1] - t[0]  # diferencia mínima de tiempo
+        if abs(tau_63 - tau_28) < min_diff:
+            tau_63 = tau_28 + min_diff  # forzar una diferencia mínima
 
         # Estimar tiempo muerto L (cuando y empieza a subir)
         umbral = y[0] + 0.01 * (y[-1] - y[0])
