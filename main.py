@@ -66,7 +66,7 @@ class PIDControlApp:
         ttk.Label(control_frame, text="Modelo a identificar:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.model_var = tk.StringVar()
         self.model_combobox = ttk.Combobox(control_frame, textvariable=self.model_var, 
-                                         values=["Análisis respuesta escalón", "Lineal ARX", "No Lineal ARMAX", "No Lineal OE"])
+                                         values=["segundo orden", "segundo orden + retardo", "Lineal ARX", "No Lineal ARMAX", "No Lineal OE"])
         self.model_combobox.grid(row=1, column=1, sticky=tk.W, padx=5)
         self.model_combobox.current(0)
         ttk.Button(control_frame, text="Identificar", command=self.identify_model).grid(row=1, column=2)
@@ -259,8 +259,10 @@ class PIDControlApp:
             
         model_type = self.model_var.get()
         try:
-            if model_type == "Análisis respuesta escalón":
+            if model_type == "segundo orden":
                 self.sys, self.K, self.L, self.T = self.modelo_segundo_orden(self.t, self.u, self.y)
+            elif model_type == "segundo orden + retardo":
+                self.sys, self.K, self.L, self.T = self.modelo_segundo_orden_con_retraso(self.t, self.u, self.y)
             elif model_type == "Lineal ARX":
                 self.sys, self.K, self.L, self.T = self.modelo_lineal(self.t, self.u, self.y)
             elif model_type == "No Lineal ARMAX":
@@ -310,6 +312,61 @@ class PIDControlApp:
         logging.info("Error cuadrático medio (2º orden): %.6f", mse)
         return sys, K, tau_28, tau_63 - tau_28
     
+    def modelo_segundo_orden_con_retraso(self, t, u, y):
+        K = y[-1] / u[-1] if u[-1] != 0 else 1
+
+        # Estimar tiempos característicos
+        target_63 = 0.632 * K * u[-1]
+        target_28 = 0.283 * K * u[-1]
+        tau_63 = t[np.argmax(y >= target_63)]
+        tau_28 = t[np.argmax(y >= target_28)]
+
+        # Estimar tiempo muerto L (cuando y empieza a subir)
+        umbral = y[0] + 0.01 * (y[-1] - y[0])
+        L_index = np.argmax(y > umbral)
+        L = t[L_index] if L_index > 0 else 0
+
+        # Constantes del sistema puro
+        T = 1.5 * (tau_63 - tau_28)
+        zeta = (1.733 * (tau_63 - tau_28)) / T if T != 0 else 1
+
+        if zeta < 1:
+            wn = 1 / (tau_63 * np.sqrt(1 - zeta**2)) if tau_63 != 0 else 1
+            num = [K * wn**2]
+            den = [1, 2*zeta*wn, wn**2]
+        elif zeta == 1:
+            a = 1 / tau_63 if tau_63 != 0 else 1
+            num = [K * a**2]
+            den = [1, 2*a, a**2]
+        else:
+            a1 = 1 / tau_63 if tau_63 != 0 else 1
+            a2 = 1 / tau_28 if tau_28 != 0 else 1
+            num = [K * a1 * a2]
+            den = [1, a1 + a2, a1 * a2]
+
+        # Sistema puro (sin retardo)
+        sys_puro = ct.TransferFunction(num, den)
+
+        # Aproximación de tiempo muerto usando Pade
+        Ts = t[1] - t[0]
+        num_delay, den_delay = ct.pade(L, n=1)  # orden 1 de Pade
+        delay = ct.TransferFunction(num_delay, den_delay)
+
+        # Sistema total con retardo
+        sys_total = sys_puro * delay
+
+        # Simulación
+        t_model, y_model = ct.step_response(sys_total, T=t[-1], T_num=len(t))
+        y_model *= u[-1]
+
+        self.plot_model_comparison(t, y, t_model, y_model, 'Modelo 2º orden + tiempo muerto')
+        logging.info("\nFunción de transferencia estimada (con retardo):\n%s", sys_total)
+
+        mse = self.calcular_mse(y, y_model)
+        logging.info("Error cuadrático medio (2º orden + tiempo muerto): %.6f", mse)
+
+        return sys_total, K, L, T
+
     def modelo_nolineal_oe(self, t, u, y, nb=2, d=1):
         """
         Modelo OE no lineal (cuadrático) con tiempo muerto de d pasos.
