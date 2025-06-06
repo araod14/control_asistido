@@ -720,7 +720,7 @@ class PIDControlApp:
         sistema_cerrado = ct.feedback(sistema_abierto, 1)
 
         t_out, y_out = ct.step_response(sistema_cerrado, T=T_sim)
-        y_out *= self.u[-1]
+        y_out *= 3.5
         
         y_interp = np.interp(t_out, self.t, self.y)
         
