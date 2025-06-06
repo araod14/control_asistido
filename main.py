@@ -304,6 +304,7 @@ class PIDControlApp:
         sys = ct.TransferFunction(num, den)
         t_model, y_model = ct.step_response(sys, T=t[-1], T_num=len(t))
         y_model *= u[-1]
+        y_model += y[0]
 
         self.plot_model_comparison(t, y, t_model, y_model, 'Modelo estimado (análisis respuesta escalón)')
         logging.info("\nFunción de transferencia estimada:\n%s", sys)
@@ -358,6 +359,7 @@ class PIDControlApp:
         # Simulación
         t_model, y_model = ct.step_response(sys_total, T=t[-1], T_num=len(t))
         y_model *= u[-1]
+        y_model += y[0]
 
         self.plot_model_comparison(t, y, t_model, y_model, 'Modelo 2º orden + tiempo muerto')
         logging.info("\nFunción de transferencia estimada (con retardo):\n%s", sys_total)
