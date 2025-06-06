@@ -308,28 +308,50 @@ class PIDControlApp:
         logging.info("Error cuadrático medio (2º orden): %.6f", mse)
         return sys, K, tau_28, tau_63 - tau_28
     
-    def modelo_lineal(self, t, u, y):
+    def modelo_lineal(self, t, u, y, d=1):
+        """
+        Modelo ARX de segundo orden con tiempo muerto (d pasos).
+        :param t: Vector de tiempo
+        :param u: Entrada (input)
+        :param y: Salida (output)
+        :param d: Tiempo muerto en pasos (entero)
+        """
         N = len(y)
-        phi = np.zeros((N-2, 4))
-        for i in range(2, N):
-            phi[i-2] = [y[i-1], y[i-2], u[i-1], u[i-2]]
-        Y = y[2:]
+        if N <= d + 2:
+            raise ValueError("La señal es muy corta para el tiempo muerto especificado.")
+
+        # Matriz de regresores φ y vector de salida Y
+        phi = np.zeros((N - (d + 2), 4))
+        for i in range(d + 2, N):
+            phi[i - (d + 2)] = [y[i - 1], y[i - 2], u[i - d - 1], u[i - d - 2]]
+        Y = y[d + 2:]
+
+        # Estimación de parámetros (a1, a2, b1, b2)
         theta = np.linalg.lstsq(phi, Y, rcond=None)[0]
         logging.info("\nParámetros estimados (a1, a2, b1, b2):\n%s", theta)
 
+        # Simulación del modelo ARX con tiempo muerto
         y_sim = np.zeros(N)
-        y_sim[:2] = y[:2]
-        for i in range(2, N):
-            y_sim[i] = (theta[0]*y_sim[i-1] + theta[1]*y_sim[i-2] +
-                        theta[2]*u[i-1] + theta[3]*u[i-2])
+        y_sim[:d + 2] = y[:d + 2]  # condiciones iniciales
+        for i in range(d + 2, N):
+            y_sim[i] = (
+                theta[0] * y_sim[i - 1] +
+                theta[1] * y_sim[i - 2] +
+                theta[2] * u[i - d - 1] +
+                theta[3] * u[i - d - 2]
+            )
 
-        self.plot_model_comparison(t, y, t, y_sim, 'Modelo lineal (ARX)')
-        mse = self.calcular_mse(y, y_sim, offset=2)
-        logging.info("Error cuadrático medio (lineal): %.6f", mse)
-        num = [theta[2], theta[3]]
+        self.plot_model_comparison(t, y, t, y_sim, f'Modelo ARX (d = {d} pasos)')
+        mse = self.calcular_mse(y, y_sim, offset=d + 2)
+        logging.info("Error cuadrático medio (ARX): %.6f", mse)
+
+        # Crear función de transferencia discreta con tiempo muerto
+        num = [0]*d + [theta[2], theta[3]]  # incluir ceros para representar el delay
         den = [1, -theta[0], -theta[1]]
-        sys = ct.TransferFunction(num, den, dt=t[1]-t[0])
-        return sys, sum(num)/sum(den), t[1], 5*(t[1]-t[0])
+        Ts = t[1] - t[0]
+        sys = ct.TransferFunction(num, den, dt=Ts)
+
+        return sys, sum(num)/sum(den), Ts, d*Ts
     
     def modelo_nolineal(self, t, u, y, na=2, nb=2):
         N = len(y)
