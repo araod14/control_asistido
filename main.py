@@ -505,9 +505,21 @@ class PIDControlApp:
         den = [1, -theta[0], -theta[1]]
         Ts = t[1] - t[0]
         sys = ct.TransferFunction(num, den, dt=Ts)
-        logging.info("\nFunción de transferencia estimada:\n%s", sys)
 
-        return sys, sum(num)/sum(den), Ts, d*Ts
+        
+        # Cálculo de K (ganancia estática)
+        K = sum(num) / sum(den)  # Ganancia en estado estacionario
+
+        # Cálculo de T (constante de tiempo equivalente)
+        poles = np.roots(den)
+        dominant_pole = max(np.abs(poles))  # Polo dominante (mayor magnitud)
+        T = -1 / np.log(dominant_pole) * (t[1] - t[0])  # Tiempo de respuesta aproximado
+
+        # Tiempo muerto L
+        L = d * (t[1] - t[0])
+        logging.info("\nFunción de transferencia estimada:\n%s", sys)
+        logging.info("\nValores de K, L y T estimados:\nK = %.6f\nL = %.6f\nT = %.6f", K, d*Ts, Ts*2)
+        return sys, K, T, L  # Ahora devuelve K, T, L en formato esperado
     
     def modelo_nolineal(self, t, u, y, na=2, nb=2):
         N = len(y)
